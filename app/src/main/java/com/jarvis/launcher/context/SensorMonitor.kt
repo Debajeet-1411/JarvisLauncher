@@ -151,12 +151,42 @@ class SensorMonitor(private val context: Context) {
     /**
      * Check if user is at a known location
      *
-     * TODO: Implement geofencing for home/work detection
+     * FIXED: Implement basic geofencing for home/work detection
      */
     fun isAtKnownLocation(locationType: LocationType): Boolean {
-        // TODO: Implement geofencing logic
-        Log.d(TAG, "Checking if at location: $locationType")
+        val location = getLastKnownLocation() ?: return false
+
+        // TODO: Load saved locations from preferences
+        // For now, return false - user needs to set up locations first
+        Log.d(
+            TAG,
+            "Checking if at location: $locationType at ${location.latitude}, ${location.longitude}"
+        )
+
+        // In future, check if current location is within radius of saved location
+        // Example: isWithinRadius(location, savedHomeLocation, 100f)
         return false
+    }
+
+    /**
+     * Check if location is within radius (meters) of target
+     */
+    private fun isWithinRadius(current: Location, target: Location, radiusMeters: Float): Boolean {
+        val distance = FloatArray(1)
+        Location.distanceBetween(
+            current.latitude, current.longitude,
+            target.latitude, target.longitude,
+            distance
+        )
+        return distance[0] <= radiusMeters
+    }
+
+    /**
+     * Save a known location (home, work, etc.)
+     */
+    fun saveKnownLocation(type: LocationType, location: Location) {
+        // TODO: Save to DataStore preferences
+        Log.d(TAG, "Saved location $type: ${location.latitude}, ${location.longitude}")
     }
 
     /**

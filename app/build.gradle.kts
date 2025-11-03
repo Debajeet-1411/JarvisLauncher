@@ -62,6 +62,12 @@ dependencies {
     // --- Image loading (for app icons) ---
     implementation("io.coil-kt:coil-compose:2.4.0")
 
+    // --- CameraX for vision support ---
+    implementation("androidx.camera:camera-core:1.3.0")
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-view:1.3.0")
+
     // --- Background tasks & scheduling ---
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 

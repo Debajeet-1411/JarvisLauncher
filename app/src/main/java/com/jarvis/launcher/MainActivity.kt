@@ -1,6 +1,7 @@
 package com.jarvis.launcher
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -39,11 +40,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.rememberAsyncImagePainter
 import com.jarvis.launcher.ai.engine.AiEngine
 import com.jarvis.launcher.ai.engine.AiMode
 import com.jarvis.launcher.data.ConversationRepository
 import com.jarvis.launcher.data.CustomFolder
 import com.jarvis.launcher.ui.components.*
+import com.jarvis.launcher.ui.gestures.GestureCallbacks
+import com.jarvis.launcher.ui.gestures.GestureHandler
 import com.jarvis.launcher.ui.launcher.*
 import com.jarvis.launcher.ui.settings.SettingsDialog
 import com.jarvis.launcher.ui.theme.JarvisColors
@@ -142,6 +146,7 @@ fun FuturisticLauncherScreen(
     var showAiSheet by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var wakeWordEnabled by remember { mutableStateOf(false) }
+    var showWakeWordWarning by remember { mutableStateOf(false) }
 
     // Day 4: New states
     val showCategories by viewModel.showCategories.collectAsStateWithLifecycle()
@@ -153,6 +158,64 @@ fun FuturisticLauncherScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val smartSuggestions by viewModel.smartSuggestions.collectAsStateWithLifecycle()
     val mostUsedApps by viewModel.mostUsedApps.collectAsStateWithLifecycle()
+
+    // FIXED: Initialize AI Engine on startup
+    LaunchedEffect(Unit) {
+        aiEngine.initialize()
+    }
+
+    // FIXED: Gesture handling setup
+    val gestureHandler = remember { GestureHandler(context) }
+    var showSearchFocus by remember { mutableStateOf(false) }
+
+    val gestureCallbacks = remember {
+        object : GestureCallbacks {
+            override fun onSwipeDown(velocity: Float) {
+                // Open notifications
+                try {
+                    // Try to expand notifications panel
+                    @Suppress("DEPRECATION", "WrongConstant")
+                    context.getSystemService("statusbar")?.let { service ->
+                        service.javaClass
+                            .getMethod("expandNotificationsPanel")
+                            .invoke(service)
+                    }
+                } catch (e: Exception) {
+                    // Fallback: open notification settings
+                    try {
+                        val intent =
+                            android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    } catch (ex: Exception) {
+                        // Silent fail
+                    }
+                }
+            }
+
+            override fun onSwipeUp(velocity: Float) {
+                // Scroll to app drawer (if not already there)
+                scope.launch {
+                    scrollState.animateScrollTo(scrollState.maxValue)
+                }
+            }
+
+            override fun onDoubleTap(offset: androidx.compose.ui.geometry.Offset) {
+                // Focus search bar
+                showSearchFocus = true
+                viewModel.updateSearchQuery("")
+            }
+
+            override fun onLongPress(offset: androidx.compose.ui.geometry.Offset) {
+                // Toggle category view
+                viewModel.toggleCategoryView()
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        gestureHandler.setCallbacks(gestureCallbacks)
+    }
 
     // Day 4: Wake word detection listener
     LaunchedEffect(wakeWordEnabled) {
@@ -167,7 +230,20 @@ fun FuturisticLauncherScreen(
     }
 
     // Main UI
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { offset ->
+                        gestureCallbacks.onDoubleTap(offset)
+                    },
+                    onLongPress = { offset ->
+                        gestureCallbacks.onLongPress(offset)
+                    }
+                )
+            }
+    ) {
         // Hexagonal tech pattern background
         HexagonalPattern(
             modifier = Modifier.fillMaxSize(),
@@ -463,7 +539,13 @@ fun FuturisticLauncherScreen(
         ) {
             // Day 4: Wake word toggle
             IconButton(
-                onClick = { wakeWordEnabled = !wakeWordEnabled },
+                onClick = {
+                    if (!wakeWordEnabled) {
+                        showWakeWordWarning = true
+                    } else {
+                        wakeWordEnabled = !wakeWordEnabled
+                    }
+                },
                 modifier = Modifier
                     .size(48.dp)
                     .background(
@@ -516,6 +598,94 @@ fun FuturisticLauncherScreen(
             )
         }
 
+        // Wake Word Warning Dialog
+        if (showWakeWordWarning) {
+            AlertDialog(
+                onDismissRequest = { showWakeWordWarning = false },
+                containerColor = JarvisColors.darkSlate,
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = JarvisColors.neonPink
+                        )
+                        Text(
+                            text = "⚠️ Experimental Feature",
+                            color = Color.White
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Wake Word Detection is currently experimental and has limitations:",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "• NOT real 'Hey JARVIS' keyword recognition",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "• Uses simplified energy-based detection",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "• May trigger on loud noises",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "• Higher battery usage",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 13.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "For true wake word detection, future updates will integrate ML-based keyword spotting.",
+                            color = JarvisColors.neonCyan.copy(alpha = 0.8f),
+                            fontSize = 12.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            wakeWordEnabled = true
+                            showWakeWordWarning = false
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = JarvisColors.neonCyan
+                        )
+                    ) {
+                        Text("I Understand, Enable")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = { showWakeWordWarning = false },
+                        border = BorderStroke(1.dp, JarvisColors.neonCyan.copy(alpha = 0.5f))
+                    ) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+
         // Day 4: Folder content sheet
         selectedFolder?.let { folder ->
             FolderContentSheet(
@@ -533,6 +703,7 @@ fun FuturisticLauncherScreen(
 
 /**
  * Futuristic Search Bar (matches reference UI)
+ * FIXED: Now actually accepts input and filters apps!
  */
 @Composable
 fun FuturisticSearchBar(
@@ -555,13 +726,47 @@ fun FuturisticSearchBar(
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = placeholder,
-            color = Color.White.copy(alpha = 0.5f),
-            fontSize = 16.sp,
-            modifier = Modifier.weight(1f)
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.weight(1f),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = Color.White,
+                fontSize = 16.sp
+            ),
+            singleLine = true,
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(JarvisColors.neonCyan),
+            decorationBox = { innerTextField ->
+                Box(
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 16.sp
+                        )
+                    }
+                    innerTextField()
+                }
+            }
         )
-        
+
+        // Clear button when text is entered
+        if (value.isNotEmpty()) {
+            IconButton(
+                onClick = { onValueChange("") },
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear",
+                    tint = JarvisColors.neonCyan.copy(alpha = 0.7f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = "Search",
@@ -732,15 +937,35 @@ fun FuturisticAiChatSheet(
     var userInput by remember { mutableStateOf("") }
     var isListening by remember { mutableStateOf(false) }
     var currentMode by remember { mutableStateOf(AiMode.LOCAL) }
+    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var isAnalyzingImage by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    // Image picker launcher
+    val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        selectedImageUri = uri
+    }
 
     val persistedHistory by conversationRepo.loadConversation()
         .collectAsStateWithLifecycle(initialValue = emptyList())
     var chatHistory by remember { mutableStateOf(persistedHistory) }
+    val chatScrollState = rememberScrollState()
+
+    LaunchedEffect(Unit) {
+        currentMode = aiEngine.getMode()
+    }
 
     LaunchedEffect(persistedHistory) {
         if (chatHistory.isEmpty() && persistedHistory.isNotEmpty()) {
             chatHistory = persistedHistory
+        }
+    }
+
+    LaunchedEffect(chatHistory.size) {
+        if (chatHistory.isNotEmpty()) {
+            chatScrollState.animateScrollTo(chatScrollState.maxValue)
         }
     }
 
@@ -752,7 +977,7 @@ fun FuturisticAiChatSheet(
             }
         }
     }
-    
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -811,9 +1036,11 @@ fun FuturisticAiChatSheet(
                     )
                     Switch(
                         checked = currentMode == AiMode.CLOUD,
-                        onCheckedChange = { 
-                            currentMode = if (it) AiMode.CLOUD else AiMode.LOCAL
-                            aiEngine.setMode(currentMode)
+                        onCheckedChange = { isCloud ->
+                            scope.launch {
+                                currentMode = if (isCloud) AiMode.CLOUD else AiMode.LOCAL
+                                aiEngine.setMode(currentMode)
+                            }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = JarvisColors.neonCyan,
@@ -830,7 +1057,7 @@ fun FuturisticAiChatSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(chatScrollState)
             ) {
                 if (chatHistory.isEmpty()) {
                     GlowingCard(
@@ -844,15 +1071,98 @@ fun FuturisticAiChatSheet(
                         )
                     }
                 } else {
-                    chatHistory.forEach { message ->
+                    chatHistory.takeLast(100).forEach { message ->
                         ChatBubble(message)
                         Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Show indicator if messages were trimmed
+                    if (chatHistory.size > 100) {
+                        Text(
+                            text = "${chatHistory.size - 100} older messages hidden",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
                     }
                 }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
-            
+
+            // FIXED: Image preview if selected
+            selectedImageUri?.let { uri ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = JarvisColors.glassMedium
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "📷 Image Selected",
+                                color = JarvisColors.neonCyan,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            IconButton(
+                                onClick = { selectedImageUri = null },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    tint = JarvisColors.neonPink,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        // Image preview
+                        androidx.compose.foundation.Image(
+                            painter = rememberAsyncImagePainter(uri),
+                            contentDescription = "Selected image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+
+                        if (isAnalyzingImage) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = JarvisColors.neonCyan,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Analyzing...",
+                                    color = Color.White,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Input row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -897,38 +1207,109 @@ fun FuturisticAiChatSheet(
                 
                 IconButton(
                     onClick = {
-                        if (userInput.isNotBlank()) {
+                        if (userInput.isNotBlank() || selectedImageUri != null) {
                             val currentInput = userInput
+                            val imageUri = selectedImageUri
                             userInput = ""
-
-                            val userMessage = ChatMessage(currentInput, true)
-                            chatHistory = chatHistory + userMessage
+                            selectedImageUri = null
 
                             scope.launch {
-                                conversationRepo.addMessage(userMessage)
-                                
                                 try {
-                                    val response = aiEngine.processCommand(currentInput, chatHistory)
-                                    val aiMessage = ChatMessage(response.message, false)
-                                    chatHistory = chatHistory + aiMessage
-                                    conversationRepo.addMessage(aiMessage)
+                                    // Handle image analysis if image is selected
+                                    if (imageUri != null && currentMode == AiMode.CLOUD) {
+                                        isAnalyzingImage = true
 
-                                    response.action?.let { action ->
-                                        when (action.type) {
-                                            "launch_app" -> {
-                                                action.data["packageName"]?.let { pkg ->
-                                                    onLaunchApp(pkg)
-                                                }
+                                        val userMessage = ChatMessage(
+                                            text = currentInput.ifBlank { "Analyze this image" },
+                                            isUser = true,
+                                            imageUri = imageUri.toString()
+                                        )
+                                        chatHistory = (chatHistory + userMessage).takeLast(100)
+                                        conversationRepo.addMessage(userMessage)
+
+                                        // Convert URI to Bitmap
+                                        val bitmap =
+                                            android.provider.MediaStore.Images.Media.getBitmap(
+                                                context.contentResolver,
+                                                imageUri
+                                            )
+
+                                        // Analyze with vision API
+                                        val visionClient =
+                                            com.jarvis.launcher.ai.engine.VisionClient(context)
+                                        val prompt = currentInput.ifBlank {
+                                            com.jarvis.launcher.ai.engine.VisionClient.VisionPrompts.DESCRIBE
+                                        }
+
+                                        val response = when (aiEngine.getCloudProvider()) {
+                                            com.jarvis.launcher.ai.engine.CloudProvider.OPENAI -> {
+                                                val apiKey =
+                                                    aiEngine.getApiKey(com.jarvis.launcher.ai.engine.CloudProvider.OPENAI)
+                                                        ?: ""
+                                                visionClient.analyzeWithOpenAI(
+                                                    bitmap,
+                                                    prompt,
+                                                    apiKey
+                                                )
                                             }
-                                            "speak" -> {
-                                                voiceService.speak(response.message)
+
+                                            com.jarvis.launcher.ai.engine.CloudProvider.GEMINI -> {
+                                                val apiKey =
+                                                    aiEngine.getApiKey(com.jarvis.launcher.ai.engine.CloudProvider.GEMINI)
+                                                        ?: ""
+                                                visionClient.analyzeWithGemini(
+                                                    bitmap,
+                                                    prompt,
+                                                    apiKey
+                                                )
+                                            }
+                                        }
+
+                                        val aiMessage = ChatMessage("🖼️ $response", false)
+                                        chatHistory = (chatHistory + aiMessage).takeLast(100)
+                                        conversationRepo.addMessage(aiMessage)
+
+                                        isAnalyzingImage = false
+                                    }
+                                    // Regular text message
+                                    else if (currentInput.isNotBlank()) {
+                                        val userMessage = ChatMessage(currentInput, true)
+                                        chatHistory = (chatHistory + userMessage).takeLast(100)
+                                        conversationRepo.addMessage(userMessage)
+
+                                        val response =
+                                            aiEngine.processCommand(currentInput, chatHistory)
+                                        val aiMessage = ChatMessage(response.message, false)
+                                        chatHistory = (chatHistory + aiMessage).takeLast(100)
+                                        conversationRepo.addMessage(aiMessage)
+
+                                        response.action?.let { action ->
+                                            when (action.type) {
+                                                "launch_app" -> {
+                                                    action.data["packageName"]?.let { pkg ->
+                                                        onLaunchApp(pkg)
+                                                    }
+                                                }
+                                                "speak" -> {
+                                                    voiceService.speak(response.message)
+                                                }
                                             }
                                         }
                                     }
+                                    // Vision not available in local mode
+                                    else if (imageUri != null && currentMode == AiMode.LOCAL) {
+                                        val errorMsg = ChatMessage(
+                                            "📷 Vision analysis requires Cloud mode. Please switch to Cloud mode and ensure you have an API key configured.",
+                                            false
+                                        )
+                                        chatHistory = (chatHistory + errorMsg).takeLast(100)
+                                        conversationRepo.addMessage(errorMsg)
+                                    }
                                 } catch (e: Exception) {
                                     val errorMessage = ChatMessage("Error: ${e.message}", false)
-                                    chatHistory = chatHistory + errorMessage
+                                    chatHistory = (chatHistory + errorMessage).takeLast(100)
                                     conversationRepo.addMessage(errorMessage)
+                                    isAnalyzingImage = false
                                 }
                             }
                         }
@@ -941,6 +1322,22 @@ fun FuturisticAiChatSheet(
                     Icon(
                         imageVector = Icons.Default.Send,
                         contentDescription = "Send",
+                        tint = JarvisColors.spaceBlack
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        imagePickerLauncher.launch("image/*")
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(JarvisColors.neonCyan)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AddAPhoto,
+                        contentDescription = "Add Photo",
                         tint = JarvisColors.spaceBlack
                     )
                 }
@@ -960,6 +1357,7 @@ fun ChatBubble(message: ChatMessage) {
     ) {
         Box(
             modifier = Modifier
+                .widthIn(max = 280.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(
                     if (message.isUser)
@@ -977,11 +1375,28 @@ fun ChatBubble(message: ChatMessage) {
                 )
                 .padding(12.dp)
         ) {
-            Text(
-                text = message.text,
-                color = if (message.isUser) JarvisColors.spaceBlack else Color.White,
-                fontSize = 14.sp
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Show image if present
+                message.imageUri?.let { uri ->
+                    androidx.compose.foundation.Image(
+                        painter = rememberAsyncImagePainter(android.net.Uri.parse(uri)),
+                        contentDescription = "Message image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+
+                Text(
+                    text = message.text,
+                    color = if (message.isUser) JarvisColors.spaceBlack else Color.White,
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }
@@ -989,7 +1404,8 @@ fun ChatBubble(message: ChatMessage) {
 data class ChatMessage(
     val text: String,
     val isUser: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val imageUri: String? = null
 )
 
 fun getCurrentTime(): String {
