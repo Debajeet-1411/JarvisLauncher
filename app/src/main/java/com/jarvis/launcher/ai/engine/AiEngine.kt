@@ -238,7 +238,7 @@ class AiEngine(private val context: Context) {
         when {
             lowerCommand.matches(Regex("(hi|hello|hey|yo|sup|greetings?).*")) -> {
                 val greetings = listOf(
-                    "Good ${getTimeOfDay()}, sir! JARVIS at your service. How may I make your day more extraordinary?",
+                    "Good ${userContext.getTimeOfDay()}, sir! JARVIS at your service. How may I make your day more extraordinary?",
                     "Ah, ${if (isFirstInteractionToday()) "good to see you again" else "welcome back"}! Ready to conquer the digital realm?",
                     "Hello there! I've been keeping your apps in order. What shall we do today?",
                     "Greetings! Your virtual butler is at the ready. Command me!"
@@ -781,7 +781,6 @@ class AiEngine(private val context: Context) {
  * ENHANCED: Now tracks battery, charging, network status
  */
 data class UserContext(
-    var timeOfDay: String = "",
     var location: String? = null,
     var lastCommand: String = "",
     var commandCount: Int = 0,
@@ -791,7 +790,6 @@ data class UserContext(
     var dayOfWeek: String = ""
 ) {
     fun updateContext(context: Context, command: String) {
-        timeOfDay = getTimeOfDay()
         lastCommand = command
         commandCount++
 
@@ -857,7 +855,7 @@ data class UserContext(
 
     fun getContextSummary(): String {
         return buildString {
-            append("Time: ${getTimeString()} ($timeOfDay)")
+            append("Time: ${getTimeString()} (${getTimeOfDay()})")
             append(", Day: $dayOfWeek")
             if (batteryLevel >= 0) {
                 append(", Battery: ${getBatteryStatus()}")
