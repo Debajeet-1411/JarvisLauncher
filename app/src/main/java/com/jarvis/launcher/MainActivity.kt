@@ -1290,6 +1290,16 @@ fun FuturisticAiChatSheet(
                                                         onLaunchApp(pkg)
                                                     }
                                                 }
+                                                "device_control" -> {
+                                                    // Handle device control actions
+                                                    action.data["action"]?.let { deviceAction ->
+                                                        val deviceController =
+                                                            com.jarvis.launcher.automation.DeviceController(
+                                                                context
+                                                            )
+                                                        deviceController.executeAction(deviceAction)
+                                                    }
+                                                }
                                                 "speak" -> {
                                                     voiceService.speak(response.message)
                                                 }

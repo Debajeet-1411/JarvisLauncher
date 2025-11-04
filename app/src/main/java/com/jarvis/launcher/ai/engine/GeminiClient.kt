@@ -125,24 +125,72 @@ class GeminiClient(
             ),
             GeminiFunctionDeclaration(
                 name = "control_device",
-                description = "Control device settings like WiFi, Bluetooth, or flashlight",
+                description = "Control device settings like WiFi, Bluetooth, or flashlight. Use this for device-level automation tasks.",
                 parameters = GeminiFunctionParameters(
                     type = "object",
                     properties = mapOf(
                         "action" to GeminiPropertySchema(
                             type = "string",
-                            description = "Action to perform",
+                            description = "Action to perform on the device",
                             enum = listOf(
                                 "wifi_on",
                                 "wifi_off",
+                                "wifi_settings",
                                 "bluetooth_on",
                                 "bluetooth_off",
+                                "bluetooth_settings",
                                 "flashlight_on",
-                                "flashlight_off"
+                                "flashlight_off",
+                                "open_settings",
+                                "volume_up",
+                                "volume_down"
                             )
                         )
                     ),
                     required = listOf("action")
+                )
+            ),
+            GeminiFunctionDeclaration(
+                name = "search_apps",
+                description = "Search for installed applications by name or category",
+                parameters = GeminiFunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "query" to GeminiPropertySchema(
+                            type = "string",
+                            description = "Search query for finding apps"
+                        )
+                    ),
+                    required = listOf("query")
+                )
+            ),
+            GeminiFunctionDeclaration(
+                name = "get_time_info",
+                description = "Get current time, date, or day information",
+                parameters = GeminiFunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "info_type" to GeminiPropertySchema(
+                            type = "string",
+                            description = "Type of time information to retrieve",
+                            enum = listOf("time", "date", "day", "full")
+                        )
+                    ),
+                    required = listOf("info_type")
+                )
+            ),
+            GeminiFunctionDeclaration(
+                name = "get_battery_status",
+                description = "Get device battery level and charging status",
+                parameters = GeminiFunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "detailed" to GeminiPropertySchema(
+                            type = "boolean",
+                            description = "Whether to return detailed battery information"
+                        )
+                    ),
+                    required = listOf()
                 )
             )
         )

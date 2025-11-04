@@ -97,7 +97,7 @@ class OpenAiClient(
         return listOf(
             FunctionDefinition(
                 name = "launch_app",
-                description = "Launch an application by name",
+                description = "Launch an application by name. Use this when the user wants to open, launch, or start an app.",
                 parameters = FunctionParameters(
                     type = "object",
                     properties = mapOf(
@@ -111,24 +111,72 @@ class OpenAiClient(
             ),
             FunctionDefinition(
                 name = "control_device",
-                description = "Control device settings like WiFi, Bluetooth, flashlight",
+                description = "Control device settings like WiFi, Bluetooth, flashlight. Use this for device-level automation tasks.",
                 parameters = FunctionParameters(
                     type = "object",
                     properties = mapOf(
                         "action" to PropertyDefinition(
                             type = "string",
-                            description = "Action to perform",
+                            description = "Action to perform on the device",
                             enum = listOf(
                                 "wifi_on",
                                 "wifi_off",
+                                "wifi_settings",
                                 "bluetooth_on",
                                 "bluetooth_off",
+                                "bluetooth_settings",
                                 "flashlight_on",
-                                "flashlight_off"
+                                "flashlight_off",
+                                "open_settings",
+                                "volume_up",
+                                "volume_down"
                             )
                         )
                     ),
                     required = listOf("action")
+                )
+            ),
+            FunctionDefinition(
+                name = "search_apps",
+                description = "Search for installed applications by name or category",
+                parameters = FunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "query" to PropertyDefinition(
+                            type = "string",
+                            description = "Search query for finding apps"
+                        )
+                    ),
+                    required = listOf("query")
+                )
+            ),
+            FunctionDefinition(
+                name = "get_time_info",
+                description = "Get current time, date, or day information",
+                parameters = FunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "info_type" to PropertyDefinition(
+                            type = "string",
+                            description = "Type of time information to retrieve",
+                            enum = listOf("time", "date", "day", "full")
+                        )
+                    ),
+                    required = listOf("info_type")
+                )
+            ),
+            FunctionDefinition(
+                name = "get_battery_status",
+                description = "Get device battery level and charging status",
+                parameters = FunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "detailed" to PropertyDefinition(
+                            type = "string",
+                            description = "Whether to return detailed battery information (true/false)"
+                        )
+                    ),
+                    required = listOf()
                 )
             )
         )

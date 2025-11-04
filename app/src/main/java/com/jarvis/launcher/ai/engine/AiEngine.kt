@@ -665,13 +665,22 @@ class AiEngine(private val context: Context) {
 
                 "control_device" -> {
                     val action = functionCall.args["action"]?.toString() ?: ""
-                    return AiResponse(
-                        message = message.ifBlank { "Right away! Opening settings..." },
-                        action = AiAction(
-                            type = "device_control",
-                            data = mapOf("action" to action)
-                        )
-                    )
+                    return handleDeviceControl(action, message)
+                }
+
+                "search_apps" -> {
+                    val query = functionCall.args["query"]?.toString() ?: ""
+                    return handleAppSearch(query)
+                }
+
+                "get_time_info" -> {
+                    val infoType = functionCall.args["info_type"]?.toString() ?: "full"
+                    return handleTimeInfo(infoType)
+                }
+
+                "get_battery_status" -> {
+                    val detailed = functionCall.args["detailed"]?.toString()?.toBoolean() ?: false
+                    return handleBatteryStatus(detailed)
                 }
 
                 else -> {
@@ -688,6 +697,122 @@ class AiEngine(private val context: Context) {
                 action = null
             )
         }
+    }
+
+    /**
+     * Handle device control actions
+     */
+    private fun handleDeviceControl(action: String, message: String): AiResponse {
+        val responseMessage = when (action) {
+            "wifi_on", "wifi_off", "wifi_settings" -> {
+                message.ifBlank {
+                    if (action == "wifi_settings") "Opening WiFi settings..."
+                    else "Note: Android 10+ requires opening settings instead of direct toggle. Opening WiFi settings for you..."
+                }
+            }
+
+            "bluetooth_on", "bluetooth_off", "bluetooth_settings" -> {
+                message.ifBlank {
+                    if (action == "bluetooth_settings") "Opening Bluetooth settings..."
+                    else "Opening Bluetooth settings for you..."
+                }
+            }
+
+            "flashlight_on" -> message.ifBlank { "Let there be light! Flashlight activated." }
+            "flashlight_off" -> message.ifBlank { "And darkness returns. Flashlight off." }
+            "open_settings" -> message.ifBlank { "Opening system settings..." }
+            "volume_up", "volume_down" -> message.ifBlank { "Adjusting volume..." }
+            else -> message.ifBlank { "Executing device control: $action" }
+        }
+
+        return AiResponse(
+            message = responseMessage,
+            action = AiAction(
+                type = "device_control",
+                data = mapOf("action" to action)
+            )
+        )
+    }
+
+    /**
+     * Handle app search
+     */
+    private fun handleAppSearch(query: String): AiResponse {
+        val packageManager = context.packageManager
+        val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+
+        val matchingApps = packageManager.queryIntentActivities(mainIntent, 0)
+            .filter { resolveInfo ->
+                val label = resolveInfo.loadLabel(packageManager).toString()
+                label.contains(query, ignoreCase = true)
+            }
+            .take(5)
+            .map { it.loadLabel(packageManager).toString() }
+
+        return if (matchingApps.isNotEmpty()) {
+            AiResponse(
+                message = "I found these apps matching '$query': ${matchingApps.joinToString(", ")}. Would you like me to open any of them?",
+                action = null
+            )
+        } else {
+            AiResponse(
+                message = "I couldn't find any apps matching '$query'. Try a different search term or check your spelling.",
+                action = null
+            )
+        }
+    }
+
+    /**
+     * Handle time information requests
+     */
+    private fun handleTimeInfo(infoType: String): AiResponse {
+        val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+        val date = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date())
+        val day = SimpleDateFormat("EEEE", Locale.getDefault()).format(Date())
+
+        val message = when (infoType) {
+            "time" -> "It's currently $time."
+            "date" -> "Today is $date."
+            "day" -> "Today is $day."
+            "full" -> "It's $time on $date."
+            else -> "Current time: $time, Date: $date"
+        }
+
+        return AiResponse(message = message, action = null)
+    }
+
+    /**
+     * Handle battery status requests
+     */
+    private fun handleBatteryStatus(detailed: Boolean): AiResponse {
+        val batteryLevel = userContext.batteryLevel
+        val isCharging = userContext.isCharging
+
+        val message = if (detailed) {
+            buildString {
+                append("Battery Information:\n")
+                append("• Level: $batteryLevel%\n")
+                append("• Status: ${if (isCharging) "Charging" else "Not charging"}\n")
+                when {
+                    batteryLevel >= 80 -> append("• Health: Excellent")
+                    batteryLevel >= 50 -> append("• Health: Good")
+                    batteryLevel >= 20 -> append("• Health: Fair")
+                    else -> append("• Health: Low - Consider charging soon")
+                }
+            }
+        } else {
+            when {
+                isCharging -> "Battery is at $batteryLevel% and charging."
+                batteryLevel >= 80 -> "Battery is at $batteryLevel%. You're good to go!"
+                batteryLevel >= 50 -> "Battery is at $batteryLevel%."
+                batteryLevel >= 20 -> "Battery is at $batteryLevel%. Consider charging soon."
+                else -> "Battery is low at $batteryLevel%. Please charge your device."
+            }
+        }
+
+        return AiResponse(message = message, action = null)
     }
 
     /**
