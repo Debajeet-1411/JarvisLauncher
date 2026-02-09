@@ -842,11 +842,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 ## 📞 Contact
-
-**Developer**: Your Name  
-**Email**: your.email@example.com  
-**GitHub**: [@yourusername](https://github.com/yourusername)  
-**Twitter**: [@yourhandle](https://twitter.com/yourhandle)
+  
+**Email**: ninjarusher1411@gmail.email@example.com  
+**GitHub**: [@Debajeet-1411](https://github.com/Debajeet-1411)  
+**Twitter**: [@Debajeet1411](https://twitter.com/Debajeet1411)
 
 ---
 
